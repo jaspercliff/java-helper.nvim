@@ -63,6 +63,30 @@ end
 
 ---@return string dir 用于放置新文件的目录（绝对路径）
 local function default_target_dir()
+	-- snacks.nvim explorer（左侧文件管理器）里如果选中的是目录/文件，
+	-- 优先在该条目所在目录创建
+	if _G.Snacks and Snacks.picker and type(Snacks.picker.get) == "function" then
+		local ok, pickers = pcall(Snacks.picker.get, { source = "explorer", tab = true })
+		if ok and type(pickers) == "table" then
+			for _, picker in ipairs(pickers) do
+				if picker and type(picker.is_focused) == "function" and picker:is_focused() then
+					local item = type(picker.current) == "function" and picker:current() or nil
+					local file = item and item.file or nil
+					if type(file) == "string" and file ~= "" then
+						local dir = (item.dir and file) or vim.fs.dirname(file)
+						return vim.fn.fnamemodify(dir, ":p")
+					end
+					if type(picker.dir) == "function" then
+						local dir = picker:dir()
+						if type(dir) == "string" and dir ~= "" then
+							return vim.fn.fnamemodify(dir, ":p")
+						end
+					end
+				end
+			end
+		end
+	end
+
 	local buf = vim.api.nvim_get_current_buf()
 	local name = vim.api.nvim_buf_get_name(buf)
 	if name ~= "" then

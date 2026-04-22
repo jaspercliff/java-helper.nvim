@@ -14,12 +14,12 @@ function M.create_class(config, opts)
 			return
 		end
 
-		local class_name, err = Util.sanitize_class_name(input)
-		if not class_name then
+		local parts, err = Util.parse_name(input)
+		if not parts then
 			vim.notify(err, vim.log.levels.ERROR)
 			return
 		end
-		class_name = Util.capitalize_first_letter(class_name)
+		parts.class_name = Util.capitalize_first_letter(parts.class_name)
 
 		vim.ui.select(Templates.kinds(), {
 			prompt = "新建类型：",
@@ -31,20 +31,39 @@ function M.create_class(config, opts)
 				return
 			end
 
+			local function join_package(a, b)
+				a = a or ""
+				b = b or ""
+				if a ~= "" and b ~= "" then
+					return a .. "." .. b
+				end
+				return a ~= "" and a or b
+			end
+
 			local target_dir = opts.target_dir and vim.fn.fnamemodify(opts.target_dir, ":p") or TargetDir.default_target_dir()
 			local java_root = JavaRoot.find_java_source_root(target_dir)
-			local package_name = ""
+			local input_pkg = parts.package_name or ""
+			local base_pkg = ""
+
 			if java_root then
 				java_root = vim.fn.fnamemodify(java_root, ":p"):gsub("/$", "")
 				if vim.fn.stridx(target_dir, java_root) == 0 then
-					package_name = JavaRoot.infer_package(java_root, target_dir)
+					base_pkg = JavaRoot.infer_package(java_root, target_dir)
 				else
+					-- 例如在仓库根目录打开终端：把类放到标准 java 根下
 					target_dir = java_root
-					package_name = ""
+					base_pkg = ""
 				end
 			end
 
-			local path = vim.fn.fnamemodify(target_dir .. "/" .. class_name .. ".java", ":p")
+			-- 最终包名：父目录推断包 + 输入的包段
+			local package_name = join_package(base_pkg, input_pkg)
+
+			if parts.rel_dir and parts.rel_dir ~= "" then
+				target_dir = vim.fn.fnamemodify(target_dir .. "/" .. parts.rel_dir, ":p")
+			end
+
+			local path = vim.fn.fnamemodify(target_dir .. "/" .. parts.class_name .. ".java", ":p")
 			if vim.fn.filereadable(path) == 1 or vim.fn.isdirectory(path) == 1 then
 				vim.notify("文件已存在: " .. path, vim.log.levels.ERROR)
 				return
@@ -55,7 +74,7 @@ function M.create_class(config, opts)
 				vim.fn.mkdir(dir, "p")
 			end
 
-			local content = Templates.build_java_source(choice.kind, class_name, package_name, {
+			local content = Templates.build_java_source(choice.kind, parts.class_name, package_name, {
 				author = config.author,
 				since = os.date(config.since_format or "%Y-%m-%d %H:%M:%S"),
 			})

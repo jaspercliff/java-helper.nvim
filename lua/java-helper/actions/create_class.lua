@@ -5,7 +5,8 @@ local Templates = require("java-helper.templates")
 
 local M = {}
 
-function M.create_class()
+---@param config JavaHelperConfig
+function M.create_class(config)
 	vim.ui.input({ prompt = "类名（无需 .java）: " }, function(input)
 		if input == nil then
 			return
@@ -52,7 +53,10 @@ function M.create_class()
 				vim.fn.mkdir(dir, "p")
 			end
 
-			local content = Templates.build_java_source(choice.kind, class_name, package_name)
+			local content = Templates.build_java_source(choice.kind, class_name, package_name, {
+				author = config.author,
+				since = os.date(config.since_format or "%Y-%m-%d %H:%M:%S"),
+			})
 			local ok, write_err = pcall(vim.fn.writefile, vim.split(content, "\n", { plain = true }), path)
 			if not ok then
 				vim.notify("写入失败: " .. tostring(write_err), vim.log.levels.ERROR)

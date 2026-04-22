@@ -6,7 +6,9 @@ local Templates = require("java-helper.templates")
 local M = {}
 
 ---@param config JavaHelperConfig
-function M.create_class(config)
+---@param opts? {target_dir?: string}
+function M.create_class(config, opts)
+	opts = opts or {}
 	vim.ui.input({ prompt = "类名（无需 .java）: " }, function(input)
 		if input == nil then
 			return
@@ -29,7 +31,7 @@ function M.create_class(config)
 				return
 			end
 
-			local target_dir = TargetDir.default_target_dir()
+			local target_dir = opts.target_dir and vim.fn.fnamemodify(opts.target_dir, ":p") or TargetDir.default_target_dir()
 			local java_root = JavaRoot.find_java_source_root(target_dir)
 			local package_name = ""
 			if java_root then

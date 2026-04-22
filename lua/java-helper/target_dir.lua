@@ -9,6 +9,13 @@ function M.default_target_dir()
 		return dir
 	end
 
+	-- 如果上次在 snacks explorer 里选中过目录/文件，
+	-- 就算当前焦点不在 explorer，也优先使用该目录
+	dir = SnacksExplorer.last_dir()
+	if dir then
+		return dir
+	end
+
 	local buf = vim.api.nvim_get_current_buf()
 	local name = vim.api.nvim_buf_get_name(buf)
 	if name ~= "" then

@@ -1,1 +1,1 @@
-require("java-helper").setup()
+-- setup() 由用户在 lazy.nvim 的 config 回调中调用，此处不自动初始化

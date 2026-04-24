@@ -6,6 +6,8 @@ local M = {}
 
 ---@param opts JavaHelperConfig|nil
 function M.setup(opts)
+	-- 将多个table合并为一个table  force 后面覆盖前面的  keep 保留前面的 error 报错
+	-- opt 为nil 则使用{}
 	local config = vim.tbl_extend("force", Config.defaults, opts or {})
 	Config.set(config) -- 存储供 snacks 等其他入口使用
 

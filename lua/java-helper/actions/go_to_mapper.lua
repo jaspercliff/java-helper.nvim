@@ -161,4 +161,115 @@ function M.go_to_mapper(config)
 	end)
 end
 
+--- 提取 XML 文件中对应 methodName 的 SQL 块
+---@param filepath string
+---@param method_name string
+---@return string[]|nil
+local function extract_xml_block(filepath, method_name)
+	local ok, lines = pcall(vim.fn.readfile, filepath)
+	if not ok or not lines then return nil end
+	
+	local content = table.concat(lines, "\n")
+	local s, e = content:find('<[%w_]+[^>]*id=["\']' .. method_name .. '["\'][^>]*>')
+	if s then
+		local tag = content:match('<([%w_]+)', s)
+		if tag then
+			local end_tag = "</" .. tag .. ">"
+			local s_end, e_end = content:find(end_tag, e, true)
+			local block = ""
+			if s_end then
+				block = content:sub(s, e_end)
+			else
+				block = content:sub(s, e)
+			end
+			
+			local block_lines = vim.split(block, "\n", { plain = true })
+			
+			-- 自动去掉多余的缩进，使悬浮窗看起来更整洁
+			local min_indent = nil
+			for _, line in ipairs(block_lines) do
+				if line:match("%S") then
+					local indent = line:match("^(%s*)")
+					if not min_indent or #indent < min_indent then
+						min_indent = #indent
+					end
+				end
+			end
+			
+			if min_indent and min_indent > 0 then
+				for i, line in ipairs(block_lines) do
+					if #line >= min_indent then
+						block_lines[i] = line:sub(min_indent + 1)
+					end
+				end
+			end
+			
+			return block_lines
+		end
+	end
+	return nil
+end
+
+---@param config JavaHelperConfig
+---@param is_auto? boolean 是否是由 CursorHold 自动触发的
+function M.mapper_hover(config, is_auto)
+	local current_file = vim.api.nvim_buf_get_name(0)
+
+	if not current_file:match("%.java$") then
+		if not is_auto then
+			vim.notify("悬浮预览 SQL 功能仅在 Java 文件中可用", vim.log.levels.WARN, { title = "Java Helper" })
+		end
+		return
+	end
+
+	local basename = vim.fn.fnamemodify(current_file, ":t:r")
+	
+	if is_auto and not basename:match("Mapper$") and not basename:match("Dao$") then
+		return
+	end
+	
+	local method_name = get_current_method_name(true)
+
+	if not method_name or method_name == "" then
+		if not is_auto then
+			vim.notify("未能获取当前光标下的方法名", vim.log.levels.WARN, { title = "Java Helper" })
+		end
+		return
+	end
+
+	local project_root = vim.fn.getcwd()
+	local java_root_mod = require("java-helper.java_root")
+	local java_root = java_root_mod.find_java_source_root(vim.fn.fnamemodify(current_file, ":h"))
+	if java_root then
+		local possible_root = vim.fn.fnamemodify(java_root, ":h:h")
+		if vim.fn.isdirectory(possible_root) == 1 then
+			project_root = possible_root
+		end
+	end
+
+	find_files_async(project_root, basename, ".xml", function(results)
+		if #results == 0 then
+			if not is_auto then
+				vim.notify("未找到对应的 XML 文件", vim.log.levels.WARN, { title = "Java Helper" })
+			end
+			return
+		end
+
+		-- 取第一个匹配的 XML 文件
+		local target_xml = results[1]
+		local block_lines = extract_xml_block(target_xml, method_name)
+
+		if block_lines then
+			vim.lsp.util.open_floating_preview(block_lines, "xml", {
+				border = "rounded",
+				focus_id = "java_mapper_hover",
+			})
+		else
+			if not is_auto then
+				vim.notify("在 XML 中未找到对应的 ID: " .. method_name, vim.log.levels.WARN, { title = "Java Helper" })
+			end
+		end
+	end)
+end
+
 return M

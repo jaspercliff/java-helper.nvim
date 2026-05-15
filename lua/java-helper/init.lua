@@ -34,6 +34,24 @@ function M.setup(opts)
 			GoToMapper.go_to_mapper(config)
 		end, { desc = "在 Java 接口和对应的 Mapper XML 之间跳转" })
 	end
+
+	if config.mapper_hover_command then
+		vim.api.nvim_create_user_command(config.mapper_hover_command, function()
+			GoToMapper.mapper_hover(config)
+		end, { desc = "悬浮显示 Java 方法对应的 Mapper XML SQL 语句" })
+	end
+
+	if config.auto_hover_mapper then
+		local group = vim.api.nvim_create_augroup("JavaHelperAutoHover", { clear = true })
+		vim.api.nvim_create_autocmd("CursorHold", {
+			group = group,
+			pattern = "*.java",
+			callback = function()
+				GoToMapper.mapper_hover(config, true)
+			end,
+			desc = "自动悬浮显示 Java Mapper 对应的 SQL",
+		})
+	end
 end
 
 return M

@@ -44,6 +44,8 @@ local function find_files_async(root, filename, ext, callback)
 	})
 end
 
+M.find_files_async = find_files_async
+
 --- 获取当前光标所在的方法名
 local function get_current_method_name(is_java)
 	local line_num = vim.api.nvim_win_get_cursor(0)[1]

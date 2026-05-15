@@ -52,6 +52,10 @@ function M.setup(opts)
 			desc = "自动悬浮显示 Java Mapper 对应的 SQL",
 		})
 	end
+
+	if config.enable_mapper_diagnostics then
+		require("java-helper.diagnostics").setup(config)
+	end
 end
 
 return M

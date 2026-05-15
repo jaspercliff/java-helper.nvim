@@ -44,6 +44,64 @@ local function find_files_async(root, filename, ext, callback)
 	})
 end
 
+--- 获取当前光标所在的方法名
+local function get_current_method_name(is_java)
+	local line_num = vim.api.nvim_win_get_cursor(0)[1]
+	
+	if is_java then
+		local ok, ts_utils = pcall(require, "nvim-treesitter.ts_utils")
+		if ok then
+			local node = ts_utils.get_node_at_cursor()
+			while node do
+				if node:type() == "method_declaration" then
+					local name_node = node:field("name")[1]
+					if name_node then
+						local ok_text, text = pcall(vim.treesitter.get_node_text, name_node, 0)
+						if ok_text then
+							return text
+						end
+					end
+				end
+				node = node:parent()
+			end
+		end
+
+		local line = vim.api.nvim_buf_get_lines(0, line_num - 1, line_num, false)[1]
+		local match = line:match("([%w_]+)%s*%(")
+		if match then return match end
+		
+		return vim.fn.expand("<cword>")
+	else
+		for i = line_num, 1, -1 do
+			local line = vim.api.nvim_buf_get_lines(0, i - 1, i, false)[1]
+			local match = line:match('id%s*=%s*["\']([%w_]+)["\']')
+			if match then
+				return match
+			end
+			if line:match("</mapper") then break end
+		end
+		return vim.fn.expand("<cword>")
+	end
+end
+
+--- 跳转到目标文件的方法定义处
+local function jump_to_method(method_name, target_ext)
+	if not method_name or method_name == "" then return end
+	
+	vim.fn.cursor(1, 1)
+	
+	local found = 0
+	if target_ext == ".xml" then
+		found = vim.fn.search('id=["\']' .. method_name .. '["\']', "cW")
+	else
+		found = vim.fn.search('\\v<' .. method_name .. '>\\s*\\(', "cW")
+	end
+	
+	if found > 0 then
+		vim.cmd("normal! zz")
+	end
+end
+
 ---@param config JavaHelperConfig
 function M.go_to_mapper(config)
 	local current_file = vim.api.nvim_buf_get_name(0)
@@ -64,6 +122,7 @@ function M.go_to_mapper(config)
 	end
 
 	local target_ext = is_java and ".xml" or ".java"
+	local method_name = get_current_method_name(is_java)
 	local project_root = vim.fn.getcwd() -- 简单使用当前工作目录作为项目根目录
 	
 	-- 尝试查找 java_root
@@ -84,6 +143,7 @@ function M.go_to_mapper(config)
 			vim.notify("未找到对应的 " .. target_ext .. " 文件", vim.log.levels.WARN, { title = "Java Helper" })
 		elseif #results == 1 then
 			vim.cmd("edit " .. vim.fn.fnameescape(results[1]))
+			jump_to_method(method_name, target_ext)
 		else
 			vim.ui.select(results, {
 				prompt = "找到多个文件，请选择：",
@@ -94,6 +154,7 @@ function M.go_to_mapper(config)
 			}, function(choice)
 				if choice then
 					vim.cmd("edit " .. vim.fn.fnameescape(choice))
+					jump_to_method(method_name, target_ext)
 				end
 			end)
 		end

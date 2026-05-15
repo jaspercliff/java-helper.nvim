@@ -2,6 +2,7 @@ local Config = require("java-helper.config")
 local CreateClass = require("java-helper.actions.create_class")
 local InitProject = require("java-helper.actions.init_project")
 local GoToTest = require("java-helper.actions.go_to_test")
+local GoToMapper = require("java-helper.actions.go_to_mapper")
 
 local M = {}
 
@@ -26,6 +27,12 @@ function M.setup(opts)
 		vim.api.nvim_create_user_command(config.go_to_test_command, function()
 			GoToTest.go_to_test(config)
 		end, { desc = "在源文件和对应的测试文件之间跳转" })
+	end
+
+	if config.go_to_mapper_command then
+		vim.api.nvim_create_user_command(config.go_to_mapper_command, function()
+			GoToMapper.go_to_mapper(config)
+		end, { desc = "在 Java 接口和对应的 Mapper XML 之间跳转" })
 	end
 end
 

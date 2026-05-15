@@ -1,0 +1,103 @@
+local M = {}
+
+--- 从项目根目录搜索匹配的文件（异步非阻塞）
+---@param root string 项目根目录
+---@param filename string 要搜索的文件名（不含路径和扩展名）
+---@param ext string 扩展名过滤，如 ".xml" 或 ".java"
+---@param callback function 搜索完成后的回调函数，传入匹配路径列表
+local function find_files_async(root, filename, ext, callback)
+	local cmd
+	local target_name = filename .. ext
+
+	if vim.fn.executable("rg") == 1 then
+		cmd = { "rg", "--files", "--hidden", "-g", target_name, "--glob", "!{target,bin,build,out,.git,.idea,.gradle,node_modules}/*", root }
+	elseif vim.fn.executable("fd") == 1 then
+		cmd = { "fd", "-H", "-t", "f", "^" .. target_name:gsub("%.", "%%.") .. "$", "-E", "target", "-E", "bin", "-E", "build", "-E", "out", "-E", ".git", "-E", ".idea", "-E", ".gradle", root }
+	else
+		cmd = { "find", root, "-type", "f", "-name", target_name, "-not", "-path", "*/target/*", "-not", "-path", "*/bin/*", "-not", "-path", "*/build/*", "-not", "-path", "*/.git/*" }
+	end
+
+	local results = {}
+	local timer = vim.loop.new_timer()
+	-- Prevent UI lock by setting a timeout for safety
+	timer:start(10000, 0, vim.schedule_wrap(function()
+		-- We could kill the job here if we stored the job_id
+	end))
+
+	vim.fn.jobstart(cmd, {
+		stdout_buffered = false,
+		on_stdout = function(_, data)
+			if not data then return end
+			for _, line in ipairs(data) do
+				if line ~= "" then
+					table.insert(results, line)
+				end
+			end
+		end,
+		on_exit = function()
+			timer:stop()
+			timer:close()
+			vim.schedule(function()
+				callback(results)
+			end)
+		end,
+	})
+end
+
+---@param config JavaHelperConfig
+function M.go_to_mapper(config)
+	local current_file = vim.api.nvim_buf_get_name(0)
+
+	local is_java = current_file:match("%.java$")
+	local is_xml = current_file:match("%.xml$")
+
+	if not is_java and not is_xml then
+		vim.notify("当前文件不是 Java 或 XML 文件", vim.log.levels.WARN, { title = "Java Helper" })
+		return
+	end
+
+	local basename = vim.fn.fnamemodify(current_file, ":t:r")
+	
+	-- 基础验证：如果是 Java 文件，类名通常以 Mapper 结尾
+	if is_java and not basename:match("Mapper$") and not basename:match("Dao$") then
+		vim.notify("当前 Java 文件似乎不是 Mapper/Dao 接口", vim.log.levels.INFO, { title = "Java Helper" })
+	end
+
+	local target_ext = is_java and ".xml" or ".java"
+	local project_root = vim.fn.getcwd() -- 简单使用当前工作目录作为项目根目录
+	
+	-- 尝试查找 java_root
+	local java_root_mod = require("java-helper.java_root")
+	local java_root = java_root_mod.find_java_source_root(vim.fn.fnamemodify(current_file, ":h"))
+	if java_root then
+		-- 如果找到了 src/main/java，则向上两级到项目根目录
+		local possible_root = vim.fn.fnamemodify(java_root, ":h:h")
+		if vim.fn.isdirectory(possible_root) == 1 then
+			project_root = possible_root
+		end
+	end
+
+	vim.notify("正在查找 " .. basename .. target_ext .. "...", vim.log.levels.INFO, { title = "Java Helper" })
+
+	find_files_async(project_root, basename, target_ext, function(results)
+		if #results == 0 then
+			vim.notify("未找到对应的 " .. target_ext .. " 文件", vim.log.levels.WARN, { title = "Java Helper" })
+		elseif #results == 1 then
+			vim.cmd("edit " .. vim.fn.fnameescape(results[1]))
+		else
+			vim.ui.select(results, {
+				prompt = "找到多个文件，请选择：",
+				format_item = function(item)
+					-- 截取相对路径以便于阅读
+					return item:gsub(project_root .. "/", "")
+				end,
+			}, function(choice)
+				if choice then
+					vim.cmd("edit " .. vim.fn.fnameescape(choice))
+				end
+			end)
+		end
+	end)
+end
+
+return M

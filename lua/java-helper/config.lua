@@ -2,6 +2,7 @@
 ---@field create_class_command string
 ---@field init_project_command? string
 ---@field go_to_test_command? string
+---@field go_to_mapper_command? string
 ---@field sub_package? string 子包名，如 "com.jasper"，将追加到 src/main/java 和 src/test/java 之后
 ---@field author? string 作者（Javadoc）
 ---@field since_format? string os.date 格式
@@ -13,6 +14,7 @@ M.defaults = {
 	create_class_command = "JavaCreateClass",
 	init_project_command = "JavaInitProject",
 	go_to_test_command = "JavaGoToTest",
+	go_to_mapper_command = "JavaGoToMapper",
 	sub_package = nil,
 	author = nil,
 	since_format = "%Y-%m-%d %H:%M:%S",

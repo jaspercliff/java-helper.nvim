@@ -104,6 +104,68 @@ local function jump_to_method(method_name, target_ext)
 	end
 end
 
+--- 获取当前 Java 文件的包名
+local function get_package_name()
+	for i = 1, 100 do
+		local line = vim.api.nvim_buf_get_lines(0, i - 1, i, false)[1]
+		if not line then break end
+		local pkg = line:match("^%s*package%s+([%w%.]+);")
+		if pkg then return pkg end
+	end
+	return ""
+end
+
+--- 创建对应的 MyBatis XML 文件
+---@param project_root string
+---@param basename string
+---@param java_root string|nil
+local function create_mapper_xml(project_root, basename, java_root)
+	local package = get_package_name()
+	local full_class_name = (package == "" and "" or (package .. ".")) .. basename
+
+	-- 推断资源目录
+	local resources_root
+	if java_root then
+		local possible_resources = java_root:gsub("/java$", "/resources")
+		if vim.fn.isdirectory(possible_resources) == 1 then
+			resources_root = possible_resources
+		end
+	end
+
+	if not resources_root then
+		resources_root = project_root .. "/src/main/resources"
+	end
+
+	-- 常用路径：resources/mapper/ 或 resources/包名/
+	local target_dir = resources_root .. "/mapper"
+	if vim.fn.isdirectory(target_dir) ~= 1 then
+		-- 如果没有 mapper 目录，则按包名镜像
+		if package ~= "" then
+			target_dir = resources_root .. "/" .. package:gsub("%.", "/")
+		else
+			target_dir = resources_root
+		end
+	end
+
+	local target_path = target_dir .. "/" .. basename .. ".xml"
+
+	local msg = "未找到对应的 XML 文件，是否在以下位置创建？\n" .. target_path
+	local choice = vim.fn.confirm(msg, "&Yes\n&No", 1)
+
+	if choice == 1 then
+		if vim.fn.isdirectory(target_dir) ~= 1 then
+			vim.fn.mkdir(target_dir, "p")
+		end
+
+		local Templates = require("java-helper.templates")
+		local content = Templates.build_xml_mapper(full_class_name)
+		vim.fn.writefile(vim.split(content, "\n", { plain = true }), target_path)
+
+		vim.notify("已创建 XML 文件: " .. target_path, vim.log.levels.INFO, { title = "Java Helper" })
+		vim.cmd("edit " .. vim.fn.fnameescape(target_path))
+	end
+end
+
 ---@param config JavaHelperConfig
 function M.go_to_mapper(config)
 	local current_file = vim.api.nvim_buf_get_name(0)
@@ -142,7 +204,11 @@ function M.go_to_mapper(config)
 
 	find_files_async(project_root, basename, target_ext, function(results)
 		if #results == 0 then
-			vim.notify("未找到对应的 " .. target_ext .. " 文件", vim.log.levels.WARN, { title = "Java Helper" })
+			if is_java then
+				create_mapper_xml(project_root, basename, java_root)
+			else
+				vim.notify("未找到对应的 " .. target_ext .. " 文件", vim.log.levels.WARN, { title = "Java Helper" })
+			end
 		elseif #results == 1 then
 			vim.cmd("edit " .. vim.fn.fnameescape(results[1]))
 			jump_to_method(method_name, target_ext)

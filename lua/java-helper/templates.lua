@@ -75,4 +75,17 @@ function M.kinds()
 	}
 end
 
+---@param namespace string
+---@return string
+function M.build_xml_mapper(namespace)
+	local lines = {
+		'<?xml version="1.0" encoding="UTF-8"?>',
+		'<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">',
+		('<mapper namespace="%s">'):format(namespace),
+		'',
+		'</mapper>',
+	}
+	return table.concat(lines, "\n")
+end
+
 return M
